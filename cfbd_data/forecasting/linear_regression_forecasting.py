@@ -154,7 +154,7 @@ def opponent_adjustment_regression_wrapper(df_team, df_game, df_pbp,
             if ((week > 1) and (season_type == 'postseason')) | ((week < 4) and (season_type == 'regular')):
                 continue
             print(f"week: {week}, season_type: {season_type}")
-            prediction_week = df.loc[(df.week <= week) & (
+            prediction_week = df.loc[(df.week < week) & (
                         df.season_type == season_type)]  # includes current week in forecasting dataset, need to fix
             adj_df_list = opponent_adjustment_regression(prediction_week, offStr, hfaStr, defStr, stat)
             df_adj_off = adj_df_list[0]

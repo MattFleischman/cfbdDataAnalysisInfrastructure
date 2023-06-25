@@ -1,8 +1,7 @@
 import datetime
 import pandas as pd
-from io import StringIO, BytesIO # python3; python2: BytesIO
+from io import StringIO, BytesIO
 import cfbd_data.utilities.constants as constants
-import glob
 from  cfbd_data.utilities.constants import *
 import boto3
 from botocore.exceptions import ClientError
@@ -100,7 +99,7 @@ def dataframe_from_s3(path, s3_bucket, columns=None):
     prefix_objs = bucket.objects.filter(Prefix=path)
     df_list = []
     for obj in prefix_objs:
-        print(obj.key)
+        print(f"extracted object key: {obj.key}")
         body = obj.get()['Body'].read()
         temp_df = pd.read_csv(BytesIO(body), sep='|', encoding='utf8', usecols=columns, engine="pyarrow")
         df_list.append(temp_df)

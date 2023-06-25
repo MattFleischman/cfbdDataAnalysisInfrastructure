@@ -89,12 +89,14 @@ game_lines_output_columns = ['game_id', 'week', 'home', 'away', 'home_logo', 'aw
 game_lines_output_rename_dict = {'formatted_spread': 'betting_spread', 'over_under': 'betting_o_u'}
 
 filtered_betting_lines_columns = ['id', 'week', 'formatted_spread', 'over_under']
+#TODO: add below fields below: 3M_lookback_firstDowns', '3M_lookback_points_scored|', '3M_lookback_third_down_pct|', '3M_lookback_offyards|','total_offense_yards|','third_down_pct|'
 
 prediction_output_data_set_home_columns = ['game_id', 'week', 'team', 'logo_primary', 'pregame_elo',
                                           'team_stat_earning_ply_rating', 'predicted_score']
 prediction_output_data_set_home_rename_dict = {'team': 'home','logo_primary': 'home_logo','pregame_elo': 'home_elo',
                  'team_stat_earning_ply_rating': 'home_talent_rating','predicted_score': 'home_pred_points'}
 
+#TODO: add below fields below: 3M_lookback_firstDowns', '3M_lookback_points_scored|', '3M_lookback_third_down_pct|', '3M_lookback_offyards|','total_offense_yards|','third_down_pct|'
 prediction_output_data_set_away_columns = ['game_id', 'week', 'team', 'logo_primary', 'pregame_elo',
                                                          'team_stat_earning_ply_rating', 'predicted_score']
 prediction_output_data_set_away_rename_dict = {'team': 'away','logo_primary': 'away_logo','pregame_elo': 'away_elo',
@@ -153,6 +155,7 @@ default_forecasting_path = "Transformed/default_forecasting_dataset/"
 stacked_game_path = "Transformed/stacked_game_details/"
 adjusted_ppa_path = "Transformed/opponent_adjusted_ppa/"
 forecast_output_path = "Transformed/points_forecast_output/"
+post_forecast_adjustments_path =  "Transformed/post_forecast_adjustments/"
 transformed_recruiting_prefix = "Transformed/transformed_recruiting_stats/"
 team_game_stats_prefix = "GamesApi_get_team_game_stats/"
 advanced_team_game_stats_prefix = "StatsApi_get_advanced_team_game_stats/"

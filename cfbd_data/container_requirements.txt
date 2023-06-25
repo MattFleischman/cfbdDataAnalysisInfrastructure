@@ -1,6 +1,7 @@
-pandas
+requests
 cfbd
 fsspec
 s3fs
 scikit-learn
+pandas
 pyarrow

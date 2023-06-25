@@ -1,0 +1,631 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: "AWS Step Functions Human based task example. It sends an email with an HTTP URL for approval."
+Parameters:
+  Email:
+    Type: String
+    AllowedPattern: "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$"
+    ConstraintDescription: Must be a valid email address.
+    Default: mattfleischman64@gmail.com
+Resources:
+
+  #Begin API Gateway to call Step Functions
+  InitiateFundingRequestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: Funding Request Endpoint
+      Description: HTTP Endpoint to initiate the funding request workflow backed by API Gateway and Lambda
+      FailOnWarnings: true
+
+  FundingRequestResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref InitiateFundingRequestApi
+      ParentId: !GetAtt InitiateFundingRequestApi.RootResourceId
+      PathPart: fundingrequest
+
+#  FundingOptionsMethod:
+#    Type: AWS::ApiGateway::Method
+#    Properties:
+#      AuthorizationType: NONE
+#      RestApiId: !Ref InitiateFundingRequestApi
+#      ResourceId: !Ref FundingRequestResource
+#      HttpMethod: OPTIONS
+#      Integration:
+#        Type: MOCK
+#        IntegrationResponses:
+#          - StatusCode: 200
+#            ResponseParameters:
+#              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+#              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+#              method.response.header.Access-Control-Allow-Origin: "'*'"
+#            ResponseTemplates:
+#              application/json: ''
+#        PassthroughBehavior: WHEN_NO_MATCH
+#        RequestTemplates:
+#          application/json: '{"statusCode": 200}'
+#      MethodResponses:
+#        - StatusCode: 200
+#          ResponseModels:
+#            application/json: 'Empty'
+#          ResponseParameters:
+#            method.response.header.Access-Control-Allow-Headers: false
+#            method.response.header.Access-Control-Allow-Methods: false
+#            method.response.header.Access-Control-Allow-Origin: false
+
+  FundingRequestMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: "arn:aws:apigateway:us-east-1:states:action/StartExecution"
+        Credentials: !GetAtt "ApiGatewayStateFunctionRole.Arn"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json:
+            Fn::Sub: |
+                      {
+                        "input": "$util.escapeJavaScript($input.json('$'))",
+                        "stateMachineArn": "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:FundingApprovalLambdaStateMachine-9iDZgOkHFUSy"
+                      }
+      ResourceId: !Ref FundingRequestResource
+      RestApiId: !Ref InitiateFundingRequestApi
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+
+  FundingRequestApiAccount:
+    Type: 'AWS::ApiGateway::Account'
+    Properties:
+      CloudWatchRoleArn: !GetAtt "ApiGatewayCloudWatchLogsRole.Arn"
+
+  FundingRequestApiStage:
+    DependsOn:
+      - FundingRequestApiAccount
+    Type: 'AWS::ApiGateway::Stage'
+    Properties:
+      DeploymentId: !Ref FundingRequestsApiDeployment
+      MethodSettings:
+        - DataTraceEnabled: true
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          ResourcePath: /*
+      RestApiId: !Ref InitiateFundingRequestApi
+      StageName: test
+
+  FundingRequestsApiDeployment:
+    Type: "AWS::ApiGateway::Deployment"
+    DependsOn:
+      - FundingRequestMethod
+    Properties:
+      RestApiId: !Ref InitiateFundingRequestApi
+      StageName: prod
+
+  # Begin API Gateway Resources
+  ExecutionApi:
+    Type: "AWS::ApiGateway::RestApi"
+    Properties:
+      Name: "Human approval endpoint"
+      Description: "HTTP Endpoint backed by API Gateway and Lambda"
+      FailOnWarnings: true
+
+  ExecutionResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref ExecutionApi
+      ParentId: !GetAtt "ExecutionApi.RootResourceId"
+      PathPart: execution
+
+  ExecutionMethod:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaRequestApprovalFunction.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 302
+            ResponseParameters:
+              method.response.header.Location: "integration.response.body.headers.Location"
+        RequestTemplates:
+          application/json: |
+            {
+              "body" : $input.json('$'),
+              "headers": {
+                #foreach($header in $input.params().header.keySet())
+                "$header": "$util.escapeJavaScript($input.params().header.get($header))" #if($foreach.hasNext),#end
+
+                #end
+              },
+              "method": "$context.httpMethod",
+              "params": {
+                #foreach($param in $input.params().path.keySet())
+                "$param": "$util.escapeJavaScript($input.params().path.get($param))" #if($foreach.hasNext),#end
+
+                #end
+              },
+              "query": {
+                #foreach($queryParam in $input.params().querystring.keySet())
+                "$queryParam": "$util.escapeJavaScript($input.params().querystring.get($queryParam))" #if($foreach.hasNext),#end
+
+                #end
+              }
+            }
+      ResourceId: !Ref ExecutionResource
+      RestApiId: !Ref ExecutionApi
+      MethodResponses:
+        - StatusCode: 302
+          ResponseParameters:
+            method.response.header.Location: true
+
+  ApiGatewayAccount:
+    Type: 'AWS::ApiGateway::Account'
+    Properties:
+      CloudWatchRoleArn: !GetAtt "ApiGatewayCloudWatchLogsRole.Arn"
+
+  ApiGatewayCloudWatchLogsRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: ApiGatewayLogsPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:*"
+                Resource: !Sub "arn:${AWS::Partition}:logs:*:*:*"
+
+  ApiGatewayStateFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: StepFunctionsStartExecution
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "states:StartExecution"
+                Resource: "*"
+
+  ExecutionApiStage:
+    DependsOn:
+      - ApiGatewayAccount
+    Type: 'AWS::ApiGateway::Stage'
+    Properties:
+      DeploymentId: !Ref ApiDeployment
+      MethodSettings:
+        - DataTraceEnabled: true
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          ResourcePath: /*
+      RestApiId: !Ref ExecutionApi
+      StageName: states
+
+  ApiDeployment:
+    Type: "AWS::ApiGateway::Deployment"
+    DependsOn:
+      - ExecutionMethod
+    Properties:
+      RestApiId: !Ref ExecutionApi
+      StageName: DummyStage
+
+  LambdaApiGatewayInvoke:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !GetAtt "LambdaRequestApprovalFunction.Arn"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ExecutionApi}/*"
+
+  # End API Gateway Resources
+
+   #Begin state machine that publishes to Lambda and sends an email with the link for approval
+  FundingApprovalLambdaStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      Name: FundingApprovalLambdaStateMachine
+      RoleArn: !GetAtt LambdaStateMachineExecutionRole.Arn
+      DefinitionString:
+        Fn::Sub: |
+          {
+              "StartAt": "SetStatusPending",
+              "TimeoutSeconds": 3600,
+              "States": {
+                  "SetStatusPending": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "InputPath": "$",
+                      "OutputPath": "$",
+                      "Parameters": {
+                        "FunctionName": "${LambdaDdbInterfaceFunction.Arn}",
+                        "Payload": {
+                          "data_type": "Funding",
+                          "request_type": "putItem",
+                          "key": {
+                              "requestId.$": "$.requestId",
+                              "requestTimestamp.$": "$.timestamp",
+                              "userId.$": "$.userId",
+                              "value_dict.$": "$.amount",
+                              "message.$": "$.message",
+                              "requestStatus": {
+                                "S": "Pending"
+                              }
+                            }
+                        }
+                      },
+                      "Next": "Lambda Callback"
+                  },
+                  "Lambda Callback": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+                      "InputPath": "$",
+                      "OutputPath": "$",
+                      "Parameters": {
+                        "FunctionName": "${LambdaSendApprovalEmailFunction.Arn}",
+                        "Payload": {
+                          "ExecutionContext.$": "$$",
+                          "SnsTopic": "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${SNSFundingApprovalEmailTopic.TopicName}",
+                          "APIGatewayEndpoint": "https://${ExecutionApi}.execute-api.${AWS::Region}.amazonaws.com/states"
+                        }
+                      },
+                      "Next": "ManualApprovalChoiceState"
+                  },
+                  "ManualApprovalChoiceState": {
+                    "Type": "Choice",
+                    "Choices": [
+                      {
+                        "Variable": "$.Status",
+                        "StringEquals": "Approved! Task approved",
+                        "Next": "ApprovedPassState"
+                      },
+                      {
+                        "Variable": "$.Status",
+                        "StringEquals": "Rejected! Task rejected",
+                        "Next": "RejectedPassState"
+                      }
+                    ]
+                  },
+                  "ApprovedPassState": {
+                    "Type": "Pass",
+                    "OutputPath": "$",
+                    "Next": "UpdateUserFunding"
+                  },
+                  "RejectedPassState": {
+                    "Type": "Pass",
+                    "Next": "SetStatusDeclined"
+                  },
+                  "UpdateUserFunding": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "InputPath": "$",
+                      "Parameters": {
+                        "FunctionName": "${LambdaDdbInterfaceFunction.Arn}",
+                        "Payload": {
+                          "data_type": "userProfile",
+                          "request_type": "updateItem",
+                            "key": {
+                                  "userId.$": "$$.Execution.Input.userId"
+                                  },
+                              "update_attribute": "tokenAmount",
+                              "ExecutionContext.$": "$$",
+                              "value_dict.$": "$$.Execution.Input.amount",
+                              "increment": "True"
+                        }
+                      },
+                      "Next": "SetStatusApproved"
+                  },
+                  "SetStatusApproved": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "InputPath": "$",
+                      "Parameters": {
+                        "FunctionName": "${LambdaDdbInterfaceFunction.Arn}",
+                        "Payload": {
+                          "data_type": "Funding",
+                          "request_type": "updateItem",
+                          "key": {
+                                  "requestId.$": "$$.Execution.Input.requestId",
+                                  "requestTimestamp.$": "$$.Execution.Input.timestamp"
+                                  },
+                          "update_attribute": "requestStatus",
+                           "value_dict": {
+                                "S": "Approved"
+                              },
+                           "increment": "False"
+                        }
+                      },
+                      "End": true
+                  },
+                  "SetStatusDeclined": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "InputPath": "$",
+                      "Parameters": {
+                        "FunctionName": "${LambdaDdbInterfaceFunction.Arn}",
+                        "Payload": {
+                          "data_type": "Funding",
+                          "request_type": "updateItem",
+                          "key": {
+                                  "requestId.$": "$$.Execution.Input.requestId",
+                                  "requestTimestamp.$": "$$.Execution.Input.timestamp"
+                                  },
+                          "update_attribute": "requestStatus",
+                           "value_dict": {
+                                "S": "Denied"
+                              },
+                           "increment": "False"
+                        }
+                      },
+                      "End": true
+                  }
+              }
+          }
+
+  SNSFundingApprovalEmailTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        -
+           Endpoint: !Sub ${Email}
+           Protocol: email
+
+  LambdaRequestApprovalFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: LambdaRequestApprovalFunction
+      Description: Lambda function that calls back to AWS Step Functions
+      PackageType: Zip
+      Handler: request_handlers.request_approval
+      Role: !GetAtt LambdaApiGatewayIAMRole.Arn
+      Runtime: python3.9
+      Timeout: 30
+      MemorySize: 360
+      Architectures:
+        - x86_64
+      CodeUri: cfbd_data/
+
+  LambdaApiGatewayIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:*"
+                Resource: !Sub "arn:${AWS::Partition}:logs:*:*:*"
+        - PolicyName: StepFunctionsPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "states:SendTaskFailure"
+                  - "states:SendTaskSuccess"
+                Resource: "*"
+
+  LambdaSendApprovalEmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: LambdaSendApprovalEmailFunction
+      Description: Lambda function that calls SNS to send approval function
+      PackageType: Zip
+      Handler: request_handlers.sns_publish
+      Role: !GetAtt LambdaSendEmailExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 30
+      MemorySize: 360
+      Architectures:
+        - x86_64
+      CodeUri: cfbd_data/
+
+  LambdaDdbInterfaceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: LambdaDdbInterfaceFunction
+      Description: Lambda function that interacts with DynamoDb to make updates for funding requests
+      PackageType: Zip
+      Handler: request_handlers.ddb_interface
+      Role: !GetAtt LambdaDdbInterfaceExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 30
+      MemorySize: 360
+      Architectures:
+        - x86_64
+      CodeUri: cfbd_data/
+
+  LambdaDdbInterfaceExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: DynamoDBInteractionPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:PutItem"
+                  - "dynamodb:GetItem"
+                  - "dynamodb:BatchGetItem"
+                  - "dynamodb:BatchWriteItem"
+                  - "dynamodb:DeleteItem"
+                  - "dynamodb:Query"
+                  - "dynamodb:Scan"
+                Resource: !Sub "arn:${AWS::Partition}:dynamodb:*:*:*"
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: !Sub "arn:${AWS::Partition}:logs:*:*:*"
+        - PolicyName: SSMParameterPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:GetParameter"
+                  - "ssm:GetParameters"
+                Resource: "*"
+
+  LambdaStateMachineExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: InvokeCallbackLambda
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource:
+                  - !Sub "${LambdaSendApprovalEmailFunction.Arn}"
+                  - !Sub "${LambdaDdbInterfaceFunction.Arn}"
+
+  LambdaSendEmailExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: !Sub "arn:${AWS::Partition}:logs:*:*:*"
+        - PolicyName: SNSSendEmailPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "SNS:Publish"
+                Resource:
+                  - !Sub "${SNSFundingApprovalEmailTopic}"
+  UserProfileTable:
+    Type: "AWS::DynamoDB::Table"
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 1
+
+  FundingRequestsTable:
+    Type: "AWS::DynamoDB::Table"
+    Properties:
+      TableName: "ostFundingRequests"
+      AttributeDefinitions:
+        - AttributeName: requestId
+          AttributeType: S
+        - AttributeName: requestingUser
+          AttributeType: S
+        - AttributeName: requestTimestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: requestId
+          KeyType: HASH
+        - AttributeName: requestTimestamp
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: requestingUser-index
+          KeySchema:
+            - AttributeName: requestingUser
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
+  FundingTableParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value: !Ref FundingRequestsTable
+      Name: FundingTable
+      Description: Parameter to give the DDB Table name for Funding Requests
+
+  profileTableParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value: !Ref UserProfileTable
+      Name: userProfileTable
+      Description: Parameter to give the DDB Table name for user Profiles
+
+
+#ADD API GAteway that calls userProfileSettings
+#ADD API Gateway that calls Step Functions
+
+
+# End state machine that publishes to Lambda and sends an email with the link for approval
+Outputs:
+  ApiGatewayInvokeURL:
+    Value: !Sub "https://${ExecutionApi}.execute-api.${AWS::Region}.amazonaws.com/states"
+  FundingApprovalLambdaStateMachineARN:
+    Value: !Ref FundingApprovalLambdaStateMachine

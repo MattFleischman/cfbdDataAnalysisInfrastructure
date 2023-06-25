@@ -1,5 +1,7 @@
 from cfbd_data.utilities.constants import *
 def modify_game_line_output(enriched_games_filtered_df, betting_lines_df):
+    print(f"enriched_games_filtered_df columns: {enriched_games_filtered_df.columns}")
+    print(f"betting_lines_df columns: {betting_lines_df.columns}")
     prediction_output_data_set_home = enriched_games_filtered_df.loc[
         enriched_games_filtered_df.home_away == 'home', prediction_output_data_set_home_columns] \
         .rename(columns=prediction_output_data_set_home_rename_dict)
