@@ -109,7 +109,8 @@ def prep_default_forecasting_dataset(pivoted_games_data, total_recruiting_stats,
         f"advanced_enriched_games_data: {advanced_enriched_games_data.loc[advanced_enriched_games_data.team == 'Washington']}")
 
     recruiting_enriched_team_attributes = df_team.merge(total_recruiting_stats, how='left',
-                                                                              left_on=['school'], right_on=['team'])
+                                                                              left_on=['school'], right_on=['team']).rename(columns=
+        {'conference_x': 'conference'})
     print(
         f"advanced_enriched_games_data: {advanced_enriched_games_data.loc[advanced_enriched_games_data.team == 'Washington']}")
     print(
@@ -119,7 +120,7 @@ def prep_default_forecasting_dataset(pivoted_games_data, total_recruiting_stats,
                                                                            how='left', left_on=['team'],
                                                                            right_on=['team']) \
         .merge(
-        recruiting_enriched_team_attributes[['team', 'group_average_rating', 'group_average_stars', 'stars', 'rating']],
+        recruiting_enriched_team_attributes[['team', 'abbreviation', 'conference', 'group_average_rating', 'group_average_stars', 'stars', 'rating']],
         how='left', left_on=['opponent_x'], right_on=['team'], suffixes=['_team', '_opponent'])
 
     advanced_team_enriched_games_data = advanced_team_enriched_games_data[advanced_team_enriched_games_data_columns]\
@@ -138,8 +139,8 @@ def prep_default_forecasting_dataset(pivoted_games_data, total_recruiting_stats,
         .apply(lambda x: utilities.divide_string(x))
 
     advanced_team_enriched_games_data = advanced_team_enriched_games_data[
-        ['game_id', 'completed', 'team', 'week', 'season_type', 'home_away', 'logo_primary', 'logo_alt', 'opponent',
-         'team_stat_earning_ply_rating', 'stat_firstDowns', 'rating_opponent', 'pregame_elo', 'opponent_pregame_elo',
+        ['game_id', 'completed', 'team', 'conference', 'abbreviation_team', 'week', 'season_type', 'home_away', 'logo_primary', 'logo_alt', 'opponent',
+         'conference_opponent', 'abbreviation_opponent', 'abbreviation_team', 'team_stat_earning_ply_rating', 'stat_firstDowns', 'rating_opponent', 'pregame_elo', 'opponent_pregame_elo',
          'total_offense_yards', 'third_down_pct', 'points']].sort_values(by=['week', 'team'])
 
     max_week = int(max(advanced_team_enriched_games_data['week']))

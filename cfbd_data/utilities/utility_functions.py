@@ -12,6 +12,13 @@ def dataframe_to_s3(dataframe: pd.DataFrame, bucket: str, file_name: str):
     s3_resource = boto3.resource('s3')
     s3_resource.Object(bucket, file_name).put(Body=csv_buffer.getvalue())
 
+def delete_s3_prefix(bucket: str, prefix_path: str):
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(bucket)
+    for object in bucket.objects.filter(Prefix=prefix_path):
+        print(f"deleted s3 file: {object.key}")
+        object.delete()
+
 def filter_config_map(api_method, inputs):
     print(f"api_method: {api_method}")
     config_structure = constants.cfbd_api_input_map[api_method]
@@ -31,7 +38,7 @@ def api_filter_prefix_string(input_dict):
     print(f"output_str: {output_str}")
     return output_str
 
-def ingest_file_prefix_string(year, season_type, week):
+def ingest_file_prefix_string(year, season_type=None, week=None):
     output_str = ""
     if year:
         output_str += f"year_{year}/"
@@ -125,9 +132,11 @@ def output_df_by_index(output_df, s3_bucket, prefix_path, year, week=None, seaso
                 print(f"week: {week}, season_type: {season_type}")
                 output_df_final = output_df.loc[(output_df.week == week) & (output_df.season_type == season_type)]
                 path = f"{cfbd_prefix}{prefix_path}year_{str(year)}/season_{season_type}/week_{str(int(week))}"
+                delete_s3_prefix(s3_bucket, path)
                 dataframe_to_s3(output_df_final,
                                           s3_bucket,
                                           f"{path}/{extract_prefix}_{current_timestamp}.txt")
     else:
         path = f"{cfbd_prefix}{prefix_path}year_{str(year)}/season_{season_type}/week_{str(int(week))}"
+        delete_s3_prefix(s3_bucket, path)
         dataframe_to_s3(output_df, s3_bucket, f"{path}/{extract_prefix}_{current_timestamp}.txt")

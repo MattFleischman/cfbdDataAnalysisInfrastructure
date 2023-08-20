@@ -9,20 +9,20 @@ from cfbd_data.utilities.constants import *
 
 
 def apply_multiple_linear_regression(enriched_games_filtered_df, week=None, season_type=None):
-
-    print(enriched_games_filtered_df)
     if week:
-        prediction_data_set = enriched_games_filtered_df.loc[
-            (enriched_games_filtered_df.week == week) & (enriched_games_filtered_df.season_type == season_type),
-            prediction_data_set_columns].dropna()
+        print(f"running for week: {str(week)}")
         fit_data_set = enriched_games_filtered_df.loc[
-            (enriched_games_filtered_df.week != week) | (enriched_games_filtered_df.season_type != season_type),
+            (enriched_games_filtered_df.week < week) | (enriched_games_filtered_df.season_type == 'regular'),
             fit_data_set_columns].dropna()
         enriched_games_filtered_df = enriched_games_filtered_df.loc[
-            (enriched_games_filtered_df.week == week) & (enriched_games_filtered_df.season_type == season_type)]
-    print(f"fit_data_set: {fit_data_set.dtypes}")
-    print(f"prediction_data_set: {prediction_data_set[prediction_data_set.isna().any(axis=1)]}")
+            (enriched_games_filtered_df.week == week) & (
+                        enriched_games_filtered_df.season_type == season_type)].reset_index(drop=True)
+        prediction_data_set = enriched_games_filtered_df[prediction_data_set_columns].dropna()
 
+    print(f"enriched_games_filtered_df: {enriched_games_filtered_df}")
+    print(f"fit_data_set dtypes: {fit_data_set.dtypes}")
+    print(f"fit_data_set: {fit_data_set}")
+    print(f"prediction_data_set NAs: {prediction_data_set[prediction_data_set.isna().any(axis=1)]}")
     x = fit_data_set.drop(columns='points')
     y = fit_data_set['points']
 
@@ -42,7 +42,7 @@ def apply_multiple_linear_regression(enriched_games_filtered_df, week=None, seas
 
     enriched_games_filtered_df['predicted_score'] = pd.Series(y_pred_train)
 
-    return enriched_games_filtered_df
+    return enriched_games_filtered_df[points_forecast_columns]
 
 def ppa_regression_prep(df_team, df_game, df_pbp):
     # Drop non-"fbs-vs-fbs" games

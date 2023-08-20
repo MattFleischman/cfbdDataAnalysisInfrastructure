@@ -335,6 +335,34 @@ def post_prediction_adjustments(event, context):
         ),
     }
 
+
+def aggregate_season_game_summary(event, context):
+    s3_bucket = os.environ['s3_source_bucket']
+    output_prefix = event.get('output_file', aggregate_output_prefix)
+    year_input = event.get('year', None)
+    year = year_input if year_input else datetime.datetime.now().strftime('%Y')
+
+    #pull generate source data prefix string
+    ingest_prefix = utilities.ingest_file_prefix_string(year)
+
+    #pull weekly outputs
+    game_summary_prediction_output = utilities.dataframe_from_s3(
+        f"{cfbd_prefix}{post_forecast_adjustments_path}{ingest_prefix}", s3_bucket)
+
+    # output to s3
+    utilities.dataframe_to_s3(game_summary_prediction_output, s3_bucket,
+                    f"{cfbd_prefix}{output_prefix}{game_summary_prediction_file_name}")
+
+    return {
+        "statusCode": 200,
+        "body": json.dumps(
+            {
+                "message": "Request completed successfully",
+            }
+        ),
+    }
+
+
 def prediction_output(event, context):
 
     week_param = event.get("queryStringParameters", None)['week']
