@@ -140,7 +140,7 @@ def prep_default_forecasting_dataset(pivoted_games_data, total_recruiting_stats,
 
     advanced_team_enriched_games_data = advanced_team_enriched_games_data[
         ['game_id', 'completed', 'team', 'conference', 'abbreviation_team', 'week', 'season_type', 'home_away', 'logo_primary', 'logo_alt', 'opponent',
-         'conference_opponent', 'abbreviation_opponent', 'abbreviation_team', 'team_stat_earning_ply_rating', 'stat_firstDowns', 'rating_opponent', 'pregame_elo', 'opponent_pregame_elo',
+         'conference_opponent', 'abbreviation_opponent', 'team_stat_earning_ply_rating', 'stat_firstDowns', 'rating_opponent', 'pregame_elo', 'opponent_pregame_elo',
          'total_offense_yards', 'third_down_pct', 'points']].sort_values(by=['week', 'team'])
 
     max_week = int(max(advanced_team_enriched_games_data['week']))
