@@ -127,21 +127,21 @@ def apply_ppa_attribution(event, context):
     week = event.get('week', None)
 
     # pull source data
-    ingest_file_prefix = utilities.ingest_file_prefix_string(year, season_type, week)
+    #ingest_file_prefix = utilities.ingest_file_prefix_string(year, season_type, week)
 
     df_team = utilities.dataframe_from_s3(
         f"{cfbd_prefix}TeamsApi_get_fbs_teams/year_{year}/", s3_bucket)
     df_game = utilities.dataframe_from_s3(
-        f"{cfbd_prefix}GamesApi_get_games/{ingest_file_prefix}", s3_bucket)
+        f"{cfbd_prefix}GamesApi_get_games/year_{year}/season_{season_type}/", s3_bucket)
     df_pbp = utilities.dataframe_from_s3(
-        f"{cfbd_prefix}PlaysApi_get_plays/{ingest_file_prefix}", s3_bucket, columns=get_plays_columns)
+        f"{cfbd_prefix}PlaysApi_get_plays/year_{year}/season_{season_type}/ ", s3_bucket, columns=get_plays_columns)
 
     #apply regression
     ppa_regression = lin_reg_forecast.opponent_adjustment_regression_wrapper(df_team, df_game, df_pbp, year)
     print(f"ppa_regression: {ppa_regression}")
 
     #output regression df
-    utilities.output_df_by_index(ppa_regression, s3_bucket, output_file, year, week, season_type)
+    utilities.output_df_by_index(ppa_regression, s3_bucket, output_file, year)
 
     return {
         "statusCode": 200,
@@ -201,15 +201,15 @@ def recruiting_tranformation(event, context):
         s3_bucket)
 
     df_recruits = utilities.dataframe_from_s3(
-        f'{cfbd_prefix}RecruitingApi_get_recruiting_players/year_{str(year)}/',
+        f'{cfbd_prefix}RecruitingApi_get_recruiting_players/',
         s3_bucket)
 
     df_transfer_portal = utilities.dataframe_from_s3(
-        f'{cfbd_prefix}PlayersApi_get_transfer_portal/year_{str(year)}/',
+        f'{cfbd_prefix}PlayersApi_get_transfer_portal/',
         s3_bucket)
 
     df_get_recruiting_groups = utilities.dataframe_from_s3(
-        f'{cfbd_prefix}RecruitingApi_get_recruiting_groups/year_{str(year)}/',
+        f'{cfbd_prefix}RecruitingApi_get_recruiting_groups/',
         s3_bucket)
 
     recruiting_df = pre_pred_transformations.recruiting_transformation(df_player_stats, df_roster,
@@ -217,6 +217,7 @@ def recruiting_tranformation(event, context):
                                                                       df_get_recruiting_groups, year)
     current_timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     path = f"{cfbd_prefix}{output_prefix}year_{str(year)}"
+    utilities.delete_s3_prefix(s3_bucket, path)
     utilities.dataframe_to_s3(recruiting_df,
                               s3_bucket,
                               f"{path}/{extract_prefix}_{current_timestamp}.txt")

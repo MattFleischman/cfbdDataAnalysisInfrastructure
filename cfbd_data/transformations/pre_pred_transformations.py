@@ -22,22 +22,24 @@ def recruiting_transformation(df_player_stats, df_roster,
                               df_get_recruiting_groups, year):
 
     team_recruiting_avgs = df_get_recruiting_groups.loc[
-        df_get_recruiting_groups['position_group'] == 'All Positions', ['team', 'conference', 'position_group',
-                                                                        'average_rating', 'total_rating', 'commits',
+        df_get_recruiting_groups['position_group'] == 'All Positions', ['team', 'conference',
+                                                                        'average_rating', 'commits',
                                                                         'average_stars']]
+    team_recruiting_avgs = team_recruiting_avgs.groupby(['team', 'conference']).mean().reset_index()
+
     team_recruiting_avgs.rename(columns={'average_rating': 'group_average_rating',
-                                         'total_rating': 'group_total_rating',
-                                         'commits': 'group_commits',
+                                         'commits': 'group_avg_annual_commits',
                                          'average_stars': 'group_average_stars'}, inplace=True)
 
     df_roster['first_recruit_id'] = df_roster['recruit_ids'].apply(
         lambda x: x[1:-1].split(',')[0] if (len(x[1:-1].split(',')) > 1) else x[1:-1])
 
+    df_recruits['first_name'] = df_recruits['name'].str.split(' ', expand=True)[0]
     df_recruits['last_name'] = df_recruits['name'].str.split(' ', expand=True)[1]
     df_recruits['id'] = df_recruits['id'].apply(str)
 
     df_recruits = df_recruits[
-        ['name', 'last_name', 'id', 'athlete_id', 'recruit_type', 'year', 'ranking', 'stars', 'rating', 'committed_to',
+        ['name', 'first_name', 'last_name', 'id', 'athlete_id', 'recruit_type', 'year', 'ranking', 'stars', 'rating', 'committed_to',
          'state_province']]
 
     df_transfer_portal['id'] = None
@@ -48,7 +50,7 @@ def recruiting_transformation(df_player_stats, df_roster,
 
     df_transfer_portal['name'] = df_transfer_portal['first_name'] + " " + df_transfer_portal['last_name']
     df_transfer_portal = df_transfer_portal[
-        ['name', 'last_name', 'id', 'athlete_id', 'recruit_type', 'season', 'ranking', 'stars', 'rating', 'destination',
+        ['name', 'first_name', 'last_name', 'id', 'athlete_id', 'recruit_type', 'season', 'ranking', 'stars', 'rating', 'destination',
          'state_province']]
     df_transfer_portal.rename({'season': 'year', 'destination': 'committed_to'}, inplace=True)
 
@@ -62,8 +64,8 @@ def recruiting_transformation(df_player_stats, df_roster,
                                                            right_on=['committed_to', 'id'])
 
     secondary_recruiting_rosters_df = roster_missing_id.merge(df_recruits_expanded, 'inner',
-                                                              left_on=['team', 'last_name', 'home_state'],
-                                                              right_on=['committed_to', 'last_name', 'state_province'])
+                                                              left_on=['team', 'last_name', 'first_name'],
+                                                              right_on=['committed_to', 'last_name', 'first_name'])
 
     combined_recruiting_rosters_df_new = pd.concat([main_recruiting_rosters_df, secondary_recruiting_rosters_df],
                                                    ignore_index=True)
@@ -111,6 +113,7 @@ def prep_default_forecasting_dataset(pivoted_games_data, total_recruiting_stats,
     recruiting_enriched_team_attributes = df_team.merge(total_recruiting_stats, how='left',
                                                                               left_on=['school'], right_on=['team']).rename(columns=
         {'conference_x': 'conference'})
+
     print(
         f"advanced_enriched_games_data: {advanced_enriched_games_data.loc[advanced_enriched_games_data.team == 'Washington']}")
     print(
@@ -118,10 +121,11 @@ def prep_default_forecasting_dataset(pivoted_games_data, total_recruiting_stats,
 
     advanced_team_enriched_games_data = advanced_enriched_games_data.merge(recruiting_enriched_team_attributes,
                                                                            how='left', left_on=['team'],
-                                                                           right_on=['team']) \
+                                                                           right_on=['school']) \
         .merge(
-        recruiting_enriched_team_attributes[['team', 'abbreviation', 'conference', 'group_average_rating', 'group_average_stars', 'stars', 'rating']],
-        how='left', left_on=['opponent_x'], right_on=['team'], suffixes=['_team', '_opponent'])
+        recruiting_enriched_team_attributes[
+            ['school', 'abbreviation', 'conference', 'group_average_rating', 'group_average_stars', 'stars', 'rating']],
+        how='left', left_on=['opponent_x'], right_on=['school'], suffixes=['_team', '_opponent'])
 
     advanced_team_enriched_games_data = advanced_team_enriched_games_data[advanced_team_enriched_games_data_columns]\
                                         .rename(columns=advanced_team_enriched_games_data_rename_dict)
@@ -138,22 +142,35 @@ def prep_default_forecasting_dataset(pivoted_games_data, total_recruiting_stats,
         ~advanced_team_enriched_games_data.stat_thirdDownEff.isnull()), 'stat_thirdDownEff'] \
         .apply(lambda x: utilities.divide_string(x))
 
-    advanced_team_enriched_games_data = advanced_team_enriched_games_data[
-        ['game_id', 'completed', 'team', 'conference', 'abbreviation_team', 'week', 'season_type', 'home_away', 'logo_primary', 'logo_alt', 'opponent',
-         'conference_opponent', 'abbreviation_opponent', 'team_stat_earning_ply_rating', 'stat_firstDowns', 'rating_opponent', 'pregame_elo', 'opponent_pregame_elo',
-         'total_offense_yards', 'third_down_pct', 'points']].sort_values(by=['week', 'team'])
 
+    #Adjusted week comments
     max_week = int(max(advanced_team_enriched_games_data['week']))
     advanced_team_enriched_games_data['adjusted_week'] = advanced_team_enriched_games_data['week']
+
     advanced_team_enriched_games_data.loc[
         advanced_team_enriched_games_data.season_type == 'postseason', ['adjusted_week']] += max_week
 
+    #Filter out non-FBS schools
+    advanced_team_enriched_games_data = advanced_team_enriched_games_data.loc[
+        (advanced_team_enriched_games_data.team.isin(df_team.school.to_list())) & (
+            advanced_team_enriched_games_data.opponent.isin(df_team.school.to_list()))]
+
+    #Trim dataset and reset index, sorting in preparation for lookback calcs
+    advanced_team_enriched_games_data = advanced_team_enriched_games_data[
+        ['game_id', 'completed', 'team', 'conference', 'abbreviation_team', 'week', 'adjusted_week', 'season_type', 'home_away', 'logo_primary', 'logo_alt', 'opponent',
+         'conference_opponent', 'abbreviation_opponent', 'team_stat_earning_ply_rating', 'stat_firstDowns', 'rating_opponent', 'pregame_elo', 'opponent_pregame_elo',
+         'total_offense_yards', 'third_down_pct', 'points']]\
+        .sort_values(by=['adjusted_week', 'team'])\
+        .reset_index(drop=True)
+
+    #apply lookback calcs
     advanced_team_enriched_games_data[lookback_enrichment_columns] = apply_rolling_lookback(advanced_team_enriched_games_data,
                                                                                             'team',
                                                                                             lookback_enrichment_columns,
                                                                                             'adjusted_week',
                                                                                             advanced_team_enriched_games_data_lookback_rename_dict)
 
+    #Filter out first three weeks of data
     enriched_games_filtered = advanced_team_enriched_games_data.loc[advanced_team_enriched_games_data.adjusted_week > 3]
     print(
         f"enriched_games_filtered.loc[enriched_games_filtered.team == 'Washington']: {enriched_games_filtered.loc[enriched_games_filtered.team == 'Washington']}")
@@ -161,17 +178,14 @@ def prep_default_forecasting_dataset(pivoted_games_data, total_recruiting_stats,
     enriched_games_filtered = enriched_games_filtered.assign(
         talent_rating_differential=lambda x: x.team_stat_earning_ply_rating - x.rating_opponent).assign(
         elo_differential=lambda x: x.pregame_elo - x.opponent_pregame_elo)
-    fbs_enriched_games_filtered = enriched_games_filtered.loc[
-        (enriched_games_filtered.team.isin(df_team.school.to_list())) & (
-            enriched_games_filtered.opponent.isin(df_team.school.to_list()))]
 
-    fbs_enriched_games_filtered = fbs_enriched_games_filtered.merge(
+    fbs_enriched_games_filtered = enriched_games_filtered.merge(
         weekly_adjusted_ppa_df[['school', 'week', 'adjOff']], how='left', left_on=['team', 'week'],
         right_on=['school', 'week'])
     fbs_enriched_games_filtered = fbs_enriched_games_filtered.merge(
         weekly_adjusted_ppa_df[['school', 'week', 'adjDef']], how='left', left_on=['opponent', 'week'],
         right_on=['school', 'week']).drop(columns=['school_x', 'school_y'])
-    fbs_enriched_games_filtered.dropna(subset=['talent_rating_differential'], inplace=True)
+    fbs_enriched_games_filtered.dropna(subset=['talent_rating_differential', 'adjOff', 'adjDef'], inplace=True)
 
     return fbs_enriched_games_filtered
 
