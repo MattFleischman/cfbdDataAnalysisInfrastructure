@@ -22,10 +22,10 @@ def recruiting_transformation(df_player_stats, df_roster,
                               df_get_recruiting_groups, year):
 
     team_recruiting_avgs = df_get_recruiting_groups.loc[
-        df_get_recruiting_groups['position_group'] == 'All Positions', ['team', 'conference',
+        df_get_recruiting_groups['position_group'] == 'All Positions', ['team',
                                                                         'average_rating', 'commits',
                                                                         'average_stars']]
-    team_recruiting_avgs = team_recruiting_avgs.groupby(['team', 'conference']).mean().reset_index()
+    team_recruiting_avgs = team_recruiting_avgs.groupby(['team']).mean().reset_index()
 
     team_recruiting_avgs.rename(columns={'average_rating': 'group_average_rating',
                                          'commits': 'group_avg_annual_commits',
