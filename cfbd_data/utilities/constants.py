@@ -53,7 +53,7 @@ df_get_games_away_rename_dict = {'away_id': 'team_id', 'away_team': 'team', 'awa
 advanced_team_enriched_games_data_columns = ['id_x', 'home_away_x', 'season_x', 'week_x', 'season_type', 'completed', 'team_id', 'school_x',
          'conference_team', 'conference_opponent',
          'division_x', 'points_x', 'opponent_points', 'pregame_elo',
-         'opponent_x', 'stars_team', 'rating_team', 'position_group', 'logo_primary', 'logo_alt',
+         'opponent_x', 'stars_team', 'rating_team', 'logo_primary', 'logo_alt',
          'abbreviation_team', 'abbreviation_opponent',
          'group_average_rating_team', 'opponent_pregame_elo',
          'group_average_stars_team', 'stars_opponent', 'rating_opponent', 'group_average_rating_opponent',
