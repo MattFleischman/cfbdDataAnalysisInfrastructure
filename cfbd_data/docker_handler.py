@@ -23,21 +23,21 @@ def apply_ppa_attribution(event, context):
     week = event.get('week', None)
 
     # pull source data
-    ingest_file_prefix = utilities.ingest_file_prefix_string(year, season_type, week)
+    #ingest_file_prefix = utilities.ingest_file_prefix_string(year, season_type, week)
 
     df_team = utilities.dataframe_from_s3(
         f"{cfbd_prefix}TeamsApi_get_fbs_teams/year_{year}/", s3_bucket)
     df_game = utilities.dataframe_from_s3(
-        f"{cfbd_prefix}GamesApi_get_games/{ingest_file_prefix}", s3_bucket)
+        f"{cfbd_prefix}GamesApi_get_games/year_{year}/season_{season_type}/", s3_bucket)
     df_pbp = utilities.dataframe_from_s3(
-        f"{cfbd_prefix}PlaysApi_get_plays/{ingest_file_prefix}", s3_bucket, columns=get_plays_columns)
+        f"{cfbd_prefix}PlaysApi_get_plays/year_{year}/season_{season_type}/ ", s3_bucket, columns=get_plays_columns)
 
     #apply regression
     ppa_regression = lin_reg_forecast.opponent_adjustment_regression_wrapper(df_team, df_game, df_pbp, year)
     print(f"ppa_regression: {ppa_regression}")
 
     #output regression df
-    utilities.output_df_by_index(ppa_regression, s3_bucket, output_file, year, week, season_type)
+    utilities.output_df_by_index(ppa_regression, s3_bucket, output_file, year)
 
     return {
         "statusCode": 200,
@@ -56,7 +56,7 @@ def apply_prediction(event, context):
     season_type = event.get('season_type', None)
     week = event.get('week', None)
 
-    #pull forecast dependencies - need to pull full year
+    #pull forecast dependencies
     enriched_games_filtered_df = utilities.dataframe_from_s3(
         f"{cfbd_prefix}{default_forecasting_path}year_{year}/", s3_bucket).reset_index()
 

@@ -72,7 +72,7 @@ def recruiting_transformation(df_player_stats, df_roster,
 
     print(df_player_stats.columns)
     recruited_players_w_stats = combined_recruiting_rosters_df_new.loc[
-        combined_recruiting_rosters_df_new.id_x.isin(df_player_stats.playerId.values.tolist())]
+        combined_recruiting_rosters_df_new.id_x.isin(df_player_stats.player_id.values.tolist())]
 
     recruited_players_w_stats_sum = recruited_players_w_stats[
         ['team', 'position', 'stars', 'rating', 'ranking']].groupby(['team']).mean()

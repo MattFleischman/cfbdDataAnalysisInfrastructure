@@ -164,15 +164,15 @@ def recruiting_tranformation(event, context):
         s3_bucket)
 
     df_recruits = utilities.dataframe_from_s3(
-        f'{cfbd_prefix}RecruitingApi_get_recruiting_players/year_{str(year)}/',
+        f'{cfbd_prefix}RecruitingApi_get_recruiting_players/',
         s3_bucket)
 
     df_transfer_portal = utilities.dataframe_from_s3(
-        f'{cfbd_prefix}PlayersApi_get_transfer_portal/year_{str(year)}/',
+        f'{cfbd_prefix}PlayersApi_get_transfer_portal/',
         s3_bucket)
 
     df_get_recruiting_groups = utilities.dataframe_from_s3(
-        f'{cfbd_prefix}RecruitingApi_get_recruiting_groups/year_{str(year)}/',
+        f'{cfbd_prefix}RecruitingApi_get_recruiting_groups/',
         s3_bucket)
 
     recruiting_df = pre_pred_transformations.recruiting_transformation(df_player_stats, df_roster,
@@ -180,6 +180,7 @@ def recruiting_tranformation(event, context):
                                                                       df_get_recruiting_groups, year)
     current_timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     path = f"{cfbd_prefix}{output_prefix}year_{str(year)}"
+    utilities.delete_s3_prefix(s3_bucket, path)
     utilities.dataframe_to_s3(recruiting_df,
                               s3_bucket,
                               f"{path}/{extract_prefix}_{current_timestamp}.txt")
@@ -268,15 +269,41 @@ def post_prediction_adjustments(event, context):
             }
         ),
     }
+def aggregate_season_game_summary(event, context):
+    s3_bucket = os.environ['s3_source_bucket']
+    output_prefix = event.get('output_file', aggregate_output_prefix)
+    year_input = event.get('year', None)
+    year = year_input if year_input else datetime.datetime.now().strftime('%Y')
+
+    #pull generate source data prefix string
+    ingest_prefix = utilities.ingest_file_prefix_string(year)
+
+    #pull weekly outputs
+    game_summary_prediction_output = utilities.dataframe_from_s3(
+        f"{cfbd_prefix}{post_forecast_adjustments_path}{ingest_prefix}", s3_bucket)
+
+    # output to s3
+    utilities.dataframe_to_s3(game_summary_prediction_output, s3_bucket,
+                    f"{cfbd_prefix}{output_prefix}year_{year}/{game_summary_prediction_file_name}")
+
+    return {
+        "statusCode": 200,
+        "body": json.dumps(
+            {
+                "message": "Request completed successfully",
+            }
+        ),
+    }
 
 def prediction_output(event, context):
 
     week_param = event.get("queryStringParameters", None)['week']
+    year_param = event.get("queryStringParameters", None)['year']
     print(f"week_param: {week_param}\nparam_type: {type(week_param)}")
     logger.info(f"week_param: {week_param}\nparam_type: {type(week_param)}")
 
     s3_bucket = os.environ['s3_source_bucket']
-    prediction_output_file = os.environ['output_prediction_file']
+    prediction_output_file = f"{os.environ['output_prediction_path_root']}year_{year_param}/{os.environ['output_prediction_file']}"
 
     prediction_output_df = pd.read_csv(s3_client.get_object(Bucket=s3_bucket, Key=prediction_output_file).get("Body"), sep='|')
     print(f"prediction_output_df: {prediction_output_df}")

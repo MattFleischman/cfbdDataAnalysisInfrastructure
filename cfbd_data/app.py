@@ -53,20 +53,20 @@ def cfbd_data_ingestion(event, context):
                                                                    auth_configuration=api_auth_config,
                                                                    filter_configs=filter_configs)
 
-    # perform basic transformations to prep for future analysis
-    output_df = cfbd_api_ingestion.pre_storage_transformations(api_response_df, method)
-    # save to s3
-    s3_destination = os.environ['s3_destination']
-    print(f"s3_destination: {s3_destination}")
+                # perform basic transformations to prep for future analysis
+                output_df = cfbd_api_ingestion.pre_storage_transformations(api_response_df, method)
+                # save to s3
+                s3_destination = os.environ['s3_destination']
+                print(f"s3_destination: {s3_destination}")
 
-    filter_dict = {'year': year, 'season_type': season_type, 'week': week}
-    filter_prefix_string = utilities.api_filter_prefix_string({k: v for k, v in filter_dict.items() if v})
+                filter_dict = {'year': year, 'season': season_type, 'week': week}
+                filter_prefix_string = utilities.api_filter_prefix_string({k: v for k, v in filter_dict.items() if v})
 
-    current_timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    utilities.dataframe_to_s3(output_df, s3_destination,
-                              f"{cfbd_prefix}{api_class}_{method}/{filter_prefix_string}{extract_prefix}{txt_ext}")
-    utilities.dataframe_to_s3(output_df, s3_destination,
-                              f"{cfbd_archive}{api_class}_{method}/{filter_prefix_string}{extract_prefix}_{current_timestamp}{txt_ext}")
+                current_timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                utilities.dataframe_to_s3(output_df, s3_destination,
+                                          f"{cfbd_prefix}{api_class}_{method}/{filter_prefix_string}{extract_prefix}{txt_ext}")
+                utilities.dataframe_to_s3(output_df, s3_destination,
+                                          f"{cfbd_archive}{api_class}_{method}/{filter_prefix_string}{extract_prefix}_{current_timestamp}{txt_ext}")
 
     return {
         "statusCode": 200,
@@ -352,7 +352,7 @@ def aggregate_season_game_summary(event, context):
 
     # output to s3
     utilities.dataframe_to_s3(game_summary_prediction_output, s3_bucket,
-                    f"{cfbd_prefix}{output_prefix}{game_summary_prediction_file_name}")
+                    f"{cfbd_prefix}{output_prefix}year_{year}/{game_summary_prediction_file_name}")
 
     return {
         "statusCode": 200,
@@ -367,11 +367,12 @@ def aggregate_season_game_summary(event, context):
 def prediction_output(event, context):
 
     week_param = event.get("queryStringParameters", None)['week']
+    year_param = event.get("queryStringParameters", None)['year']
     print(f"week_param: {week_param}\nparam_type: {type(week_param)}")
     logger.info(f"week_param: {week_param}\nparam_type: {type(week_param)}")
 
     s3_bucket = os.environ['s3_source_bucket']
-    prediction_output_file = os.environ['output_prediction_file']
+    prediction_output_file = f"{os.environ['output_prediction_path_root']}year_{year_param}/{os.environ['output_prediction_file']}"
 
     prediction_output_df = pd.read_csv(s3_client.get_object(Bucket=s3_bucket, Key=prediction_output_file).get("Body"), sep='|')
     print(f"prediction_output_df: {prediction_output_df}")

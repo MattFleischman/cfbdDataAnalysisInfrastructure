@@ -4,13 +4,15 @@ cfbd_api_input_map = {'get_games': {'year': 'year', 'season_type': 'season_type'
                       'get_advanced_team_game_stats': {'year': 'year', 'season_type': 'season_type', 'week': 'week'},
                       'get_fbs_teams': {'year': 'year'},
                       'get_lines': {'year': 'year', 'week': 'week'},
-                      'get_player_season_stats': {'year': 'year', 'season_type': 'season_type', 'week': 'week'},
+                      'get_player_season_stats': {'year': 'year', 'season_type': 'season_type', 'start_week': 'week', 'end_week': 'week'},
                       'get_plays': {'year': 'year', 'season_type': 'season_type', 'week': 'week'},
                       'get_transfer_portal': {'year': 'year'},
                       'get_roster': {'year': 'year'},
                       'get_recruiting_groups': {'start_year': 'year', 'end_year': 'year'},
                       'get_recruiting_players': {'year': 'year'}
                       }
+
+
 
 cfbd_prefix = "CFBD_Analysis/"
 archive_prefix = "archive/"
@@ -146,7 +148,7 @@ prediction_output_df_rename_dict = {'formatted_spread': 'betting_spread', 'over_
 fit_data_set_columns = ['points', 'talent_rating_differential', 'elo_differential', 'adjOff', 'adjDef']
 
 prediction_data_set_columns = ['talent_rating_differential', 'elo_differential', 'adjOff', 'adjDef']
-player_season_stats_columns = ['playerId']
+player_season_stats_columns = ['player_id']
 
 offStr = 'offense'  # Column of interest, the team/player we want to adjust
 hfaStr = 'hfa'  # Homefield Advantage column name

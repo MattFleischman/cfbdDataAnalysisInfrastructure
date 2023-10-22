@@ -23,17 +23,19 @@ def filter_config_map(api_method, inputs):
     print(f"api_method: {api_method}")
     config_structure = constants.cfbd_api_input_map[api_method]
     print(f"config_structure: {config_structure}")
+    output_config ={}
 
     for key in config_structure:
-        config_structure[key] = inputs[key]
+        output_config[key] = inputs[config_structure[key]]
+        #config_structure[key] = inputs[key]
 
-    print(f"config_structure: {config_structure}")
-    return config_structure
+    print(f"output_config: {output_config}")
+    return output_config
 
 def api_filter_prefix_string(input_dict):
     output_str = ""
     for key, value in input_dict.items():
-        output_str += f"{key}_{value}"
+        output_str += f"{key}_{value}/"
 
     print(f"output_str: {output_str}")
     return output_str
