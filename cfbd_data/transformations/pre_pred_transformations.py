@@ -191,39 +191,46 @@ def prep_default_forecasting_dataset(pivoted_games_data, total_recruiting_stats,
 
 
 
-# def apply_3w_lookback(advanced_team_enriched_games_data):
-#     test_advanced_team_enriched_games_data = advanced_team_enriched_games_data.reset_index()
-#     test_advanced_team_enriched_games_data = test_advanced_team_enriched_games_data.assign(
-#         total_offense_yards=lambda x: x.stat_netPassingYards + x.stat_rushingYards)
-#
-#     test_advanced_team_enriched_games_data['third_down_pct'] = test_advanced_team_enriched_games_data[
-#         'stat_thirdDownEff'].apply(lambda x: int((x.split('-')[0])) / int((x.split('-')[1])))
-#
-#     test_advanced_team_enriched_games_data = test_advanced_team_enriched_games_data[['game_id','team','week','home_away',
-#                                                                                      'logo_primary','logo_alt','opponent',
-#                                                                                      'team_stat_earning_ply_rating','stat_firstDowns',
-#                                                                                      'rating_opponent','pregame_elo','opponent_pregame_elo',
-#                                                                                      'total_offense_yards','third_down_pct','points']
-#                                                                                     ].sort_values(by=['week','team'])
-#
-#     test_advanced_team_enriched_games_data_lookback = test_advanced_team_enriched_games_data[
-#         ['team','week','total_offense_yards','third_down_pct','stat_firstDowns','points']].groupby(['team']).transform(
-#         lambda x: x.rolling(3, 1, closed='left').mean()).rename(
-#         columns={'total_offense_yards': '3M_lookback_offyards','stat_firstDowns': '3M_lookback_firstDowns',
-#                  'third_down_pct': '3M_lookback_third_down_pct','points': '3M_lookback_points_scored'})
-#
-#     test_advanced_team_enriched_games_data[['3M_lookback_offyards','3M_lookback_third_down_pct',
-#                                             '3M_lookback_points_scored','3M_lookback_firstDowns']] = \
-#         test_advanced_team_enriched_games_data_lookback[['3M_lookback_offyards','3M_lookback_third_down_pct',
-#                                                          '3M_lookback_points_scored','3M_lookback_firstDowns']]
-#
-#     enriched_games_filtered = test_advanced_team_enriched_games_data.dropna().loc[test_advanced_team_enriched_games_data.week > 3]
-#
-#     enriched_games_filtered = enriched_games_filtered\
-#         .assign(talent_rating_differential=lambda x: x.team_stat_earning_ply_rating - x.rating_opponent)\
-#         .assign(elo_differential=lambda x: x.pregame_elo - x.opponent_pregame_elo)
-#
-#     return enriched_games_filtered
+def seed_base_forecast_data(enriched_games_filtered_df,
+                            enriched_games_filtered_pw_df,
+                            df_get_games_all):
+    enrich_games_plug_df = enriched_games_filtered_pw_df.loc[
+        ~enriched_games_filtered_pw_df.team.isin(enriched_games_filtered_df['team'].unique())]
+
+    enriched_games_plugged_df = pd.concat([enriched_games_filtered_df, enrich_games_plug_df])
+
+    forecast_prep_df = enriched_games_plugged_df.drop(
+        columns=['game_id', 'week', 'adjusted_week', 'season_type', 'completed',
+                 'conference_opponent', 'abbreviation_opponent', 'opponent', 'rating_opponent',
+                 'opponent_pregame_elo', 'talent_rating_differential', 'elo_differential', 'home_away', 'points',
+                 'index'])
+
+
+    games_df = df_get_games_all[
+        ['id', 'week', 'team', 'season_type', 'home_away', 'completed', 'opponent', 'points']]
+
+    seeding_game_stat_df = games_df.merge(forecast_prep_df, how='left', on='team').rename(
+        columns={'id': 'game_id'}).dropna(subset=['abbreviation_team'])
+
+    fill_df = seeding_game_stat_df[
+        ['team', 'abbreviation_team', 'conference', 'team_stat_earning_ply_rating', 'pregame_elo']]
+
+    seeded_games = seeding_game_stat_df.merge(fill_df, how='inner', left_on='opponent', right_on='team',
+                                              suffixes=['_team', '_opponent']).drop(
+        columns=['team_opponent']).rename(columns={'team_team': 'team', 'conference_team': 'conference',
+                                                   'abbreviation_team_team': 'abbreviation_team',
+                                                   'team_stat_earning_ply_rating_team': 'team_stat_earning_ply_rating',
+                                                   'pregame_elo_team': 'pregame_elo',
+                                                   'abbreviation_team_opponent': 'abbreviation_opponent',
+                                                   'team_stat_earning_ply_rating_opponent': 'rating_opponent',
+                                                   'pregame_elo_opponent': 'opponent_pregame_elo'})
+
+    seeded_games['talent_rating_differential'] = seeded_games['team_stat_earning_ply_rating'] - seeded_games[
+        'rating_opponent']
+    seeded_games['elo_differential'] = seeded_games['pregame_elo'] - seeded_games['opponent_pregame_elo']
+    seeded_games['adjusted_week'] = seeded_games['week']
+
+    return seeded_games
 
 
 

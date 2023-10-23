@@ -155,6 +155,7 @@ hfaStr = 'hfa'  # Homefield Advantage column name
 defStr = 'defense'  # Opponent column name
 stat = 'ppa'  # stat to adjust on
 
+default_forecasting_path_fit = "Transformed/forecasting_fit_dataset/"
 default_forecasting_path = "Transformed/default_forecasting_dataset/"
 stacked_game_path = "Transformed/stacked_game_details/"
 adjusted_ppa_path = "Transformed/opponent_adjusted_ppa/"

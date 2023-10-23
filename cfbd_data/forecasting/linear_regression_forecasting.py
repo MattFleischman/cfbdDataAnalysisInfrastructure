@@ -8,18 +8,18 @@ import cfbd_data.utilities.utility_functions as utilities
 from cfbd_data.utilities.constants import *
 
 
-def apply_multiple_linear_regression(enriched_games_filtered_df, week=None, season_type=None):
+def apply_multiple_linear_regression(regression_fit_df, prediction_dataset_df, week=None, season_type=None):
     if week:
         print(f"running for week: {str(week)}")
-        fit_data_set = enriched_games_filtered_df.loc[
-            (enriched_games_filtered_df.week < week) | (enriched_games_filtered_df.season_type == 'regular'),
+        fit_data_set = regression_fit_df.loc[
+            (regression_fit_df.week < week) | (regression_fit_df.season_type == 'regular'),
             fit_data_set_columns].dropna()
-        enriched_games_filtered_df = enriched_games_filtered_df.loc[
-            (enriched_games_filtered_df.week == week) & (
-                        enriched_games_filtered_df.season_type == season_type)].reset_index(drop=True)
-        prediction_data_set = enriched_games_filtered_df[prediction_data_set_columns].dropna()
+        regression_fit_df = prediction_dataset_df.loc[
+            (regression_fit_df.week == week) & (
+                    regression_fit_df.season_type == season_type)].reset_index(drop=True)
+        prediction_data_set = regression_fit_df[prediction_data_set_columns].dropna()
 
-    print(f"enriched_games_filtered_df: {enriched_games_filtered_df}")
+    print(f"regression_fit_df: {regression_fit_df}")
     print(f"fit_data_set dtypes: {fit_data_set.dtypes}")
     print(f"fit_data_set: {fit_data_set}")
     print(f"prediction_data_set NAs: {prediction_data_set[prediction_data_set.isna().any(axis=1)]}")
@@ -40,9 +40,9 @@ def apply_multiple_linear_regression(enriched_games_filtered_df, week=None, seas
     print(f"r2 score: {r2}")
     y_pred_train = lr.predict(prediction_data_set)
 
-    enriched_games_filtered_df['predicted_score'] = pd.Series(y_pred_train)
+    regression_fit_df['predicted_score'] = pd.Series(y_pred_train)
 
-    return enriched_games_filtered_df[points_forecast_columns]
+    return regression_fit_df[points_forecast_columns]
 
 def ppa_regression_prep(df_team, df_game, df_pbp):
     # Drop non-"fbs-vs-fbs" games

@@ -189,10 +189,9 @@ def recruiting_tranformation(event, context):
     week = event.get('week', None)
 
     # perform_recruiting_transformations
-    ingest_file_prefix = utilities.ingest_file_prefix_string(year, season_type, week)
 
     df_player_stats = utilities.dataframe_from_s3(
-        f'{cfbd_prefix}PlayersApi_get_player_season_stats/{ingest_file_prefix}',
+        f'{cfbd_prefix}PlayersApi_get_player_season_stats/year_{str(year)}/season_{season_type}/week',
         s3_bucket,
         columns=player_season_stats_columns)
 
@@ -233,7 +232,7 @@ def recruiting_tranformation(event, context):
 
 def pre_forecasting_transformation(event, context):
     s3_bucket = os.environ['s3_source_bucket']
-    output_prefix = event.get('output_file', default_forecasting_path)
+    output_prefix = event.get('output_file', default_forecasting_path_fit)
     year_input = event.get('year', None)
     year = year_input if year_input else datetime.datetime.now().strftime('%Y')
     season_type = event.get('season_type', None)
@@ -273,6 +272,41 @@ def pre_forecasting_transformation(event, context):
             }
         ),
     }
+
+def forecast_base_seeding_transformation(event, context):
+    s3_bucket = os.environ['s3_source_bucket']
+    output_prefix = event.get('output_file', default_forecasting_path)
+    year_input = event.get('year', None)
+    year = year_input if year_input else datetime.datetime.now().strftime('%Y')
+    season_type = event.get('season_type', None)
+    weeks = event.get('weeks', None)
+    lookback_week_override = None
+
+    for week in weeks:
+        # extract dependency datasets
+        lookback_week = week - 1 if lookback_week_override is None else lookback_week_override
+        lookback_week_prior = lookback_week - 1
+
+        games_ingest_file_prefix = utilities.ingest_file_prefix_string(year, season_type, week)
+        forecast_prep_ingest_file_prefix = utilities.ingest_file_prefix_string(year, season_type, lookback_week)
+        forecast_prep_ingest_file_pw_prefix = utilities.ingest_file_prefix_string(year, season_type,
+                                                                                  lookback_week_prior)
+
+        # pull forecast prep dependencies
+        enriched_games_filtered_df = utilities.dataframe_from_s3(
+            f"{cfbd_prefix}{default_forecasting_path}{forecast_prep_ingest_file_prefix}", s3_bucket).reset_index()
+        enriched_games_filtered_pw_df = utilities.dataframe_from_s3(
+            f"{cfbd_prefix}{default_forecasting_path}{forecast_prep_ingest_file_pw_prefix}", s3_bucket).reset_index()
+        df_get_games_all = utilities.dataframe_from_s3(
+            f"{cfbd_prefix}{stacked_game_path}{games_ingest_file_prefix}", s3_bucket)
+
+        seeded_games = pre_pred_transformations.seed_base_forecast_data(enriched_games_filtered_df,
+                                                                        enriched_games_filtered_pw_df,
+                                                                        df_get_games_all)
+
+        # output to s3
+        utilities.output_df_by_index(seeded_games, s3_bucket, output_prefix,
+                                     year, week, season_type)
 def apply_prediction(event, context):
     s3_bucket = os.environ['s3_source_bucket']
     output_prefix = event.get('output_file', forecast_output_path)
@@ -281,18 +315,23 @@ def apply_prediction(event, context):
     season_type = event.get('season_type', None)
     week = event.get('week', None)
 
+    ingest_file_prefix = utilities.ingest_file_prefix_string(year, season_type, week)
+
     #pull forecast dependencies
-    enriched_games_filtered_df = utilities.dataframe_from_s3(
-        f"{cfbd_prefix}{default_forecasting_path}year_{year}/", s3_bucket).reset_index()
+    regression_fit_df = utilities.dataframe_from_s3(
+        f"{cfbd_prefix}{default_forecasting_path_fit}year_{year}/", s3_bucket).reset_index()
+    prediction_dataset_df = utilities.dataframe_from_s3(
+        f"{cfbd_prefix}{default_forecasting_path}{ingest_file_prefix}", s3_bucket).reset_index()
 
     #run linear regression for points prediction
-    raw_prediction_df = lin_reg_forecast.apply_multiple_linear_regression(enriched_games_filtered_df, week, season_type)
+    raw_prediction_df = lin_reg_forecast.apply_multiple_linear_regression(regression_fit_df,
+                                                                          prediction_dataset_df,
+                                                                          week,
+                                                                          season_type)
 
     # output to s3
     utilities.output_df_by_index(raw_prediction_df, s3_bucket, output_prefix,
                                  year, week, season_type)
-
-    print("test completed") #TODO: delete line
 
     return {
         "statusCode": 200,
